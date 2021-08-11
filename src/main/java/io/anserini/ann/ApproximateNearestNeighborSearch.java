@@ -145,7 +145,7 @@ public class ApproximateNearestNeighborSearch {
     if (indexArgs.stored) {
       TopDocs topDocs = searcher.search(new TermQuery(new Term(IndexVectors.FIELD_ID, indexArgs.word)), indexArgs.depth);
       for (ScoreDoc scoreDoc : topDocs.scoreDocs) {
-        vectorStrings.add(reader.document(scoreDoc.doc).get(IndexVectors.FIELD_VECTOR));
+	vectorStrings.add(reader.document(scoreDoc.doc).get(IndexVectors.FIELD_VECTOR));
       }
     } else {
       System.out.println(String.format("Loading model %s", indexArgs.input));
