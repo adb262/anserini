@@ -16,15 +16,24 @@ def load_ann_index(filename, vector_size = 150, metric = "angular"):
 
 
 params = {}
-params["intent_embeddings"] = "../full_enc.intent.ann"
+#params["intent_embeddings"] = "../full_enc.intent.ann"
+
+#ann_index_intent = load_ann_index(
+#                params["intent_embeddings"],
+#                vector_size=200,
+#            )
+
+params["generic_embeddings"] = "../full_enc.generic.ann"
 
 ann_index_intent = load_ann_index(
-                params["intent_embeddings"],
-                vector_size=200,
+                params["generic_embeddings"],
+                vector_size=150,
             )
+
+
 print("n items: ", ann_index_intent.get_n_items())
 
-data = [ann_index_intent.get_item_vector(i) for i in range(ann_index_intent.get_n_items())]
+data = [ann_index_intent.get_item_vector(i) for i in range(ann_index_intent.get_n_items()) if not np.isnan(np.sum(ann_index_intent.get_item_vector(i)))]
 _kdTree = KDTree(np.array(data))
 
 with open("../id_to_string_hash.json", "r") as f:
@@ -41,20 +50,29 @@ print("Depth: ", depth)
 shuffled_id_dict = list(id_to_hash_dict.items())
 random.shuffle(shuffled_id_dict)
 
+default_q = sys.argv[2]
+C = int(sys.argv[3])
+
+print("Q: {}, C: {}".format(default_q, C))
+
 default_q = "30"
-if sys.argv[2]:
+if sys.argv[4] == "build":
     os.system("rm -r intent-idx-stored")
     print("removed index")
-    default_q = sys.argv[2]
     os.system("target/appassembler/bin/IndexVectors -input ../id_to_embeddings.txt -path intent-idx-stored -encoding fw -stored -fw.q {}".format(sys.argv[2]))
 
+missed = 0
 for index, (k, v) in enumerate(shuffled_id_dict):
-    if index >= 1000:
+    if index >= 10000:
         break
-    test = subprocess.check_output("target/appassembler/bin/ApproximateNearestNeighborSearch -stored -path intent-idx-stored -encoding fw -word {} -depth {} -fw.q {}".format(v, str((int(depth)*10)), default_q).split()).split()
-    result_ids = [str(hash_to_id_dict[test[10 + (3*i)]]) for i in range((int(depth) * 10))]
-    average_latency += float(test[-1][:test[-1].find("m")])
+    test = subprocess.check_output("target/appassembler/bin/ApproximateNearestNeighborSearch -stored -path intent-idx-stored -encoding fw -word {} -depth {} -fw.q {}".format(v, str((int(depth) * C)), default_q).split()).split()
+    try:
+        result_ids = [str(hash_to_id_dict[test[10 + (3*i)]]) for i in range((int(depth) * C))]
+    except:
+        print(test)
+        missed += 1
 
+    average_latency += float(test[-1][:test[-1].find("m")])
     #Find ann neighbors
     neighbors_ann = ' '.join(map(str, ann_index_intent.get_nns_by_item(int(k), int(depth)))).split()
     
@@ -70,11 +88,11 @@ for index, (k, v) in enumerate(shuffled_id_dict):
 
     if not index % 10:
         print(index)
-        print("Average recall: {:.2f}".format(float(average) / (index + 1)))
-        print("latency: {:.2f}" .format(average_latency / (index + 1)))
-        print("Average recall ANN: {:.2f}".format(float(average_recall_ann) / (index + 1)))
+        print("Average recall: {:.2f}".format(float(average) / (index + 1 - missed)))
+        print("latency: {:.2f}" .format(average_latency / (index + 1 - missed)))
+        print("Average recall ANN: {:.2f}".format(float(average_recall_ann) / (index + 1 - missed)))
                 
-print("Average Recall: {:.2f}, Average Latency: {}".format(float(average) / 1000, average_latency / 1000))
+print("Average Recall: {:.2f}, Average Latency: {}".format(float(average) / 10000, average_latency / 10000))
 #os.system("target/appassembler/bin/ApproximateNearestNeighborSearch -input ../id_to_embeddings.txt -path intent-idx -encoding fw -word test_word")
 #os.system("target/appassembler/bin/ApproximateNearestNeighborSearch -stored -path intent-idx -encoding fw -word test_word")
 print("done")
